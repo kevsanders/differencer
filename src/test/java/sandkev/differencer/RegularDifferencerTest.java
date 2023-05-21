@@ -2,11 +2,13 @@ package sandkev.differencer;
 
 import lombok.Builder;
 import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
 import org.junit.Test;
 import sandkev.differencer.api.*;
 
 import java.time.LocalDateTime;
 import java.util.Comparator;
+import java.util.Objects;
 import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
@@ -14,9 +16,8 @@ import java.util.function.Supplier;
 /**
  * Created by kevin on 08/10/2018.
  */
+@Slf4j
 public class RegularDifferencerTest {
-
-    private DiffAlgorithm differencer;
 
     @Data
     @Builder(toBuilder = true)
@@ -42,29 +43,26 @@ public class RegularDifferencerTest {
         }
     }
 
-    private Comparator<MyType> keyComparator;
-    private DiffComparator<MyType> dataComparator;
-
     @Test
     public void canCompareMatchedSortedSet(){
 
-        keyComparator = Comparator
+        Comparator<MyType> keyComparator = Comparator
                 .comparing(MyType::getDomain)
                 .thenComparing(MyType::getName);
 
-        dataComparator = (o1, o2) -> {
+        DiffComparator<MyType> dataComparator = (o1, o2) -> {
             DiffSummary builder = new DiffSummary();
-            if( o1.getFlavour() != o2.getFlavour()) {
+            if (o1.getFlavour() != o2.getFlavour()) {
                 builder.addDiff("flavour",
                         o1.getFlavour(), o2.getFlavour(),
                         ComparisonResult.Changed);
             }
-            if( o1.getRegion() != o2.getRegion()) {
+            if (o1.getRegion() != o2.getRegion()) {
                 builder.addDiff("region",
                         o1.getRegion(), o2.getRegion(),
                         ComparisonResult.Changed);
             }
-            if( o1.getBio() != o2.getBio()) {
+            if (!Objects.equals(o1.getBio(), o2.getBio())) {
                 builder.addDiff("bio",
                         o1.getBio(), o2.getBio(),
                         ComparisonResult.Changed);
@@ -87,49 +85,50 @@ public class RegularDifferencerTest {
         revisions.add(MyType.builder().domain(1L).name("e").region(0).flavour(2).bio("coool").build());
 
 
-        differencer = new RegularDifferencer(keyComparator, dataComparator);
+        DiffAlgorithm<MyType, MyTypeKey, Comparator<MyType>, DiffComparator<MyType>, Iterable<MyType>> differencer
+                = new RegularDifferencer(keyComparator, dataComparator);
 
         AtomicInteger equalCount = new AtomicInteger();
         AtomicInteger approximatelyEqualCount = new AtomicInteger();
         AtomicInteger addedCount = new AtomicInteger();
         AtomicInteger droppedCount = new AtomicInteger();
         AtomicInteger changedCount = new AtomicInteger();
-        ComparisonResultHandler handler = new ComparisonResultHandler() {
+        ComparisonResultHandler<MyType,MyTypeKey> handler = new ComparisonResultHandler<MyType, MyTypeKey>() {
             @Override
-            public void onEqual(Object id) {
-                System.out.println("equals: " + id);
+            public void onEqual(MyTypeKey id) {
+                log.info("equals: " + id);
                 equalCount.incrementAndGet();
             }
 
             @Override
-            public void onApproximatelyEqual(Object id, DiffSummary diff) {
-                System.out.println("appoximatelyEquals: " + id + " diff: " + diff);
+            public void onApproximatelyEqual(MyTypeKey id, DiffSummary diff) {
+                log.info("appoximatelyEquals: " + id + " diff: " + diff);
                 approximatelyEqualCount.incrementAndGet();
             }
 
             @Override
-            public void onAdded(Object id, Object added) {
-                System.out.println("added: " + added );
+            public void onAdded(MyTypeKey id, MyType added) {
+                log.info("added: " + added );
                 addedCount.incrementAndGet();
             }
 
             @Override
-            public void onDropped(Object id, Object dropped) {
-                System.out.println("dropped: " + dropped );
+            public void onDropped(MyTypeKey id, MyType dropped) {
+                log.info("dropped: " + dropped );
                 droppedCount.incrementAndGet();
             }
 
             @Override
-            public void onChanged(Object id, DiffSummary diff) {
-                System.out.println("changed: " + id + " diff: " + diff );
+            public void onChanged(MyTypeKey id, DiffSummary diff) {
+                log.info("changed: " + id + " diff: " + diff );
                 changedCount.incrementAndGet();
             }
         };
-        Supplier expectedSource = () -> originals;
-        Supplier actualSource = () -> revisions;
+        Supplier<Iterable<MyType>> expectedSource = () -> originals;
+        Supplier<Iterable<MyType>> actualSource = () -> revisions;
         differencer.computeDiff(expectedSource, actualSource, handler);
 
-        System.out.println("equalCount: " + equalCount + ", approximatelyEqualCount: " + approximatelyEqualCount +
+        log.info("equalCount: " + equalCount + ", approximatelyEqualCount: " + approximatelyEqualCount +
                 ", addedCount: " + addedCount + ", droppedCount: " + droppedCount + ", changedCount: " +changedCount);
 
 
