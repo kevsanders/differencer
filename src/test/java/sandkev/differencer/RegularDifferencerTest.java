@@ -88,6 +88,7 @@ public class RegularDifferencerTest {
         DiffAlgorithm<MyType, MyTypeKey, Comparator<MyType>, DiffComparator<MyType>, Iterable<MyType>> differencer
                 = new RegularDifferencer(keyComparator, dataComparator);
 
+        final ComparisonResultStats stats = new ComparisonResultStats();
         AtomicInteger equalCount = new AtomicInteger();
         AtomicInteger approximatelyEqualCount = new AtomicInteger();
         AtomicInteger addedCount = new AtomicInteger();
@@ -97,39 +98,38 @@ public class RegularDifferencerTest {
             @Override
             public void onEqual(MyTypeKey id) {
                 log.info("equals: " + id);
-                equalCount.incrementAndGet();
+                stats.onEqual(id);
             }
 
             @Override
             public void onApproximatelyEqual(MyTypeKey id, DiffSummary diff) {
                 log.info("appoximatelyEquals: " + id + " diff: " + diff);
-                approximatelyEqualCount.incrementAndGet();
+                stats.onApproximatelyEqual(id, diff);
             }
 
             @Override
             public void onAdded(MyTypeKey id, MyType added) {
                 log.info("added: " + added );
-                addedCount.incrementAndGet();
+                stats.onAdded(id, added);
             }
 
             @Override
             public void onDropped(MyTypeKey id, MyType dropped) {
                 log.info("dropped: " + dropped );
-                droppedCount.incrementAndGet();
+                stats.onDropped(id, dropped);
             }
 
             @Override
             public void onChanged(MyTypeKey id, DiffSummary diff) {
                 log.info("changed: " + id + " diff: " + diff );
-                changedCount.incrementAndGet();
+                stats.onChanged(id, diff);
             }
         };
         Supplier<Iterable<MyType>> expectedSource = () -> originals;
         Supplier<Iterable<MyType>> actualSource = () -> revisions;
         differencer.computeDiff(expectedSource, actualSource, handler);
 
-        log.info("equalCount: " + equalCount + ", approximatelyEqualCount: " + approximatelyEqualCount +
-                ", addedCount: " + addedCount + ", droppedCount: " + droppedCount + ", changedCount: " +changedCount);
+        log.info("stats: {}", stats);
 
 
     }

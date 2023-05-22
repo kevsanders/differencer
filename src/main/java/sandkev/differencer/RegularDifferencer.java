@@ -18,7 +18,7 @@ public class RegularDifferencer<T extends Identifiable<K>,K,C extends Comparator
     }
 
     @Override
-    public void computeDiff(Supplier<I> expectedSource, Supplier<I> actualSource, ComparisonResultHandler handler) {
+    public void computeDiff(Supplier<I> expectedSource, Supplier<I> actualSource, ComparisonResultHandler<T,K> handler) {
 
         Iterable<T> expectedIter = expectedSource.get();
         Iterable<T> actualIter = actualSource.get();

@@ -11,5 +11,5 @@ import java.util.function.Supplier;
  * @param <I> Iterable data input source
  */
 public interface DiffAlgorithm<T extends Identifiable<K>, K, C extends Comparator<T>, D extends DiffComparator<T>, I extends Iterable<T>> {
-    void computeDiff(Supplier<I> expectedSource, Supplier<I> actualSource, ComparisonResultHandler handler);
+    void computeDiff(Supplier<I> expectedSource, Supplier<I> actualSource, ComparisonResultHandler<T,K> handler);
 }
