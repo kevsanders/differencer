@@ -10,7 +10,6 @@ import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.Objects;
 import java.util.TreeSet;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 /**
@@ -51,23 +50,23 @@ public class RegularDifferencerTest {
                 .thenComparing(MyType::getName);
 
         DiffComparator<MyType> dataComparator = (o1, o2) -> {
-            DiffSummary builder = new DiffSummary();
+            DiffSummary diffs = new DiffSummary();
             if (o1.getFlavour() != o2.getFlavour()) {
-                builder.addDiff("flavour",
+                diffs.addDiff("flavour",
                         o1.getFlavour(), o2.getFlavour(),
                         ComparisonResult.Changed);
             }
             if (o1.getRegion() != o2.getRegion()) {
-                builder.addDiff("region",
+                diffs.addDiff("region",
                         o1.getRegion(), o2.getRegion(),
                         ComparisonResult.Changed);
             }
             if (!Objects.equals(o1.getBio(), o2.getBio())) {
-                builder.addDiff("bio",
+                diffs.addDiff("bio",
                         o1.getBio(), o2.getBio(),
                         ComparisonResult.Changed);
             }
-            return builder;
+            return diffs;
         };
 
         TreeSet<MyType> originals = new TreeSet<>(keyComparator);
@@ -89,11 +88,6 @@ public class RegularDifferencerTest {
                 = new RegularDifferencer(keyComparator, dataComparator);
 
         final ComparisonResultStats stats = new ComparisonResultStats();
-        AtomicInteger equalCount = new AtomicInteger();
-        AtomicInteger approximatelyEqualCount = new AtomicInteger();
-        AtomicInteger addedCount = new AtomicInteger();
-        AtomicInteger droppedCount = new AtomicInteger();
-        AtomicInteger changedCount = new AtomicInteger();
         ComparisonResultHandler<MyType,MyTypeKey> handler = new ComparisonResultHandler<MyType, MyTypeKey>() {
             @Override
             public void onEqual(MyTypeKey id) {
