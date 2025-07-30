@@ -37,6 +37,11 @@ public class ComparisonResultStats implements ComparisonResultHandler {
     }
 
     @Override
+    public String describe() {
+        return toString();
+    }
+
+    @Override
     public String toString() {
         return "ComparisonResultStats{" +
                 "equal=" + equalCount +

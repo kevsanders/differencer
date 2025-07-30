@@ -118,6 +118,12 @@ public class RegularDifferencerTest {
                 log.info("changed: " + id + " diff: " + diff );
                 stats.onChanged(id, diff);
             }
+
+            @Override
+            public String describe() {
+                return stats.describe();
+            }
+
         };
         differencer.computeDiff(originals, revisions, handler);
 
