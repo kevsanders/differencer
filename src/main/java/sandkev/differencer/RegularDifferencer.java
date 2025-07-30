@@ -4,134 +4,64 @@ import sandkev.differencer.api.*;
 
 import java.util.Comparator;
 import java.util.Iterator;
-import java.util.function.Supplier;
+import java.util.Objects;
 
 
-public class RegularDifferencer<T extends Identifiable<K>,K,C extends Comparator<T>,D extends DiffComparator<T>,I extends Iterable<T>>
-        implements DiffAlgorithm<T,K,C,D,I> {
+public class RegularDifferencer<T extends Identifiable<K>,K>
+  implements DiffAlgorithm<T,K,Comparator<? super T>,DiffComparator<? super T>> {
 
-    private final C keyComparator;
-    private final D dataComparator;
-    public RegularDifferencer(C keyComparator, D dataComparator){
-        this.keyComparator = keyComparator;
-        this.dataComparator = dataComparator;
+    private final Comparator<? super T> keyComparator;
+    private final DiffComparator<? super T> dataComparator;
+
+    public RegularDifferencer(Comparator<? super T> keyComparator,
+                              DiffComparator<? super T> dataComparator) {
+        this.keyComparator  = Objects.requireNonNull(keyComparator);
+        this.dataComparator = Objects.requireNonNull(dataComparator);
     }
 
     @Override
-    public void computeDiff(Supplier<I> expectedSource, Supplier<I> actualSource, ComparisonResultHandler<T,K> handler) {
+    public void computeDiff(Iterable<T> expected,
+                            Iterable<T> actual,
+                            ComparisonResultHandler<T,K> handler) {
+        Iterator<T> itE = expected.iterator();
+        Iterator<T> itA = actual.iterator();
+        T e = nextOrNull(itE), a = nextOrNull(itA);
 
-        Iterable<T> expectedIter = expectedSource.get();
-        Iterable<T> actualIter = actualSource.get();
-
-        Iterator<T> expectedItor = expectedIter.iterator();
-        Iterator<T> actualItor = actualIter.iterator();
-
-        T expected = nextOrNull(expectedItor);
-        if(expected==null){
-            throw new IllegalArgumentException("Stream of expected data is empty");
+        while (e != null && a != null) {
+            int cmp = keyComparator.compare(a, e);
+            if (cmp == 0) {
+                DiffSummary d = dataComparator.compare(a, e);
+                switch (d.getComparisonResult()) {
+                  case Equal:
+                    handler.onEqual(e.getId()); break;
+                  case ApproximatelyEqual:
+                    handler.onApproximatelyEqual(e.getId(), d); break;
+                  default:
+                    handler.onChanged(e.getId(), d); break;
+                }
+                a = nextOrNull(itA);
+                e = nextOrNull(itE);
+            } else if (cmp < 0) {
+                handler.onAdded(a.getId(), a);
+                a = nextOrNull(itA);
+            } else {
+                handler.onDropped(e.getId(), e);
+                e = nextOrNull(itE);
+            }
         }
 
-        T actual = nextOrNull(actualItor);
-        if(actual==null) {
-            throw new IllegalArgumentException("Stream of actual data is empty");
+        // flush remaining
+        while (e != null) {
+          handler.onDropped(e.getId(), e);
+          e = nextOrNull(itE);
         }
-
-        T previousActual = null;
-        T previousExpected = null;
-        int direction = 0;
-        while (actual!=null && expected!=null){
-
-            direction = checkDirection(actual, previousActual, direction);
-            direction = checkDirection(expected, previousExpected, direction);
-            if(direction==0 && previousExpected!=null){
-                System.out.println("dup key: " + expected.getId());
-            }
-
-            int keyMatch = keyComparator.compare(actual, expected);
-            if(keyMatch == 0){
-                //same key
-                DiffSummary diff = dataComparator.compare(actual,expected);
-                if( diff.getComparisonResult() == ComparisonResult.Equal ) {
-                    handler.onEqual(expected.getId());
-                } else if(diff.getComparisonResult() == ComparisonResult.ApproximatelyEqual ) {
-                    handler.onApproximatelyEqual(expected.getId(), diff);
-                } else {
-                    handler.onChanged(expected.getId(), diff);
-                }
-            }else if( keyMatch > 0){
-                //actual is bigger
-                if(direction<0){
-                    handler.onDropped(expected.getId(), expected);
-                }else {
-                    handler.onAdded(actual.getId(), actual);
-                }
-            }else {
-                //actual is smaller
-                if(direction<0){
-                    handler.onAdded(actual.getId(), actual);
-                }else {
-                    handler.onDropped(expected.getId(), expected);
-                }
-            }
-
-            previousActual = actual;
-            previousExpected = expected;
-            if( keyMatch==0 ) {
-                //increment both sides
-                actual = nextOrNull(actualItor);
-                expected = nextOrNull(expectedItor);
-                direction = checkDirection(actual, previousActual, direction);
-                direction = checkDirection(expected, previousExpected, direction);
-            } else if( keyMatch > 0 ) {
-                //actual is bigger
-                if(direction<0) {
-                    expected = nextOrNull(expectedItor);
-                    direction = checkDirection(expected, previousExpected, direction);
-                }else {
-                    actual = nextOrNull(actualItor);
-                    direction = checkDirection(actual, previousActual, direction);
-                }
-            }else {
-                //actual is smaller
-                if(direction<0) {
-                    actual = nextOrNull(actualItor);
-                    direction = checkDirection(actual, previousActual, direction);
-                }else {
-                    expected = nextOrNull(expectedItor);
-                    direction = checkDirection(expected, previousExpected, direction);
-                }
-            }
-
-            if(expected==null && actual!=null){
-                handler.onAdded(actual.getId(), actual);
-            }
-            if(actual==null && expected!=null){
-                handler.onDropped(expected.getId(), expected);
-            }
-
+        while (a != null) {
+          handler.onAdded(a.getId(), a);
+          a = nextOrNull(itA);
         }
-
-
     }
 
-    private int checkDirection(T item, T previousItem, int currentDirection) {
-        if(item==null||previousItem==null){
-            return currentDirection;
-        }
-        int direction=keyComparator.compare(previousItem, item);
-        if(direction==0){
-            throw new IllegalArgumentException("Duplicate found in primary key: " + item.getId());
-        }
-        if(currentDirection != 0 && direction != 0){
-            if(Math.signum(currentDirection)!=Math.signum(direction)){
-                throw new IllegalArgumentException("keys (" + previousItem.getId() + "->" + item.getId() + ") going in the wrong direction expected " + Math.signum(currentDirection) + " but was " + Math.signum(direction));
-            }
-        }
-        return direction;
+    private T nextOrNull(Iterator<T> it) {
+        return (it != null && it.hasNext()) ? it.next() : null;
     }
-
-    private T nextOrNull(Iterator<T> itor) {
-        return itor==null||!itor.hasNext()?null:itor.next();
-    }
-
 }

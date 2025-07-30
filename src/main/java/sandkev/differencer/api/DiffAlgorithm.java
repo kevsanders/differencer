@@ -8,8 +8,7 @@ import java.util.function.Supplier;
  * @param <K> Primary key of object to be compared
  * @param <C> Key comparator
  * @param <D> Data comparator
- * @param <I> Iterable data input source
  */
-public interface DiffAlgorithm<T extends Identifiable<K>, K, C extends Comparator<T>, D extends DiffComparator<T>, I extends Iterable<T>> {
-    void computeDiff(Supplier<I> expectedSource, Supplier<I> actualSource, ComparisonResultHandler<T,K> handler);
+public interface DiffAlgorithm<T extends Identifiable<K>, K, C extends Comparator<? super T>, D extends DiffComparator<? super T>> {
+    void computeDiff(Iterable<T> expectedSource, Iterable<T> actualSource, ComparisonResultHandler<T,K> handler);
 }

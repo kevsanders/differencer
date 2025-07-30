@@ -84,7 +84,7 @@ public class RegularDifferencerTest {
         revisions.add(MyType.builder().domain(1L).name("e").region(0).flavour(2).bio("coool").build());
 
 
-        DiffAlgorithm<MyType, MyTypeKey, Comparator<MyType>, DiffComparator<MyType>, Iterable<MyType>> differencer
+        DiffAlgorithm<MyType, MyTypeKey, Comparator<MyType>, DiffComparator<MyType>> differencer
                 = new RegularDifferencer(keyComparator, dataComparator);
 
         final ComparisonResultStats stats = new ComparisonResultStats();
@@ -119,9 +119,7 @@ public class RegularDifferencerTest {
                 stats.onChanged(id, diff);
             }
         };
-        Supplier<Iterable<MyType>> expectedSource = () -> originals;
-        Supplier<Iterable<MyType>> actualSource = () -> revisions;
-        differencer.computeDiff(expectedSource, actualSource, handler);
+        differencer.computeDiff(originals, revisions, handler);
 
         log.info("stats: {}", stats);
 
