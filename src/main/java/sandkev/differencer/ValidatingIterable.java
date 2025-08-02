@@ -18,8 +18,8 @@ public class ValidatingIterable<T> implements Iterable<T> {
     private final Comparator<? super T> comparator;
 
     public ValidatingIterable(Iterable<T> source, Comparator<? super T> comparator) {
-        this.source      = Objects.requireNonNull(source,      "source must not be null");
-        this.comparator  = Objects.requireNonNull(comparator,  "comparator must not be null");
+        this.source = Objects.requireNonNull(source, "source must not be null");
+        this.comparator = Objects.requireNonNull(comparator, "comparator must not be null");
     }
 
     @Override
@@ -29,12 +29,13 @@ public class ValidatingIterable<T> implements Iterable<T> {
 
     private static class ValidatingIterator<T> implements Iterator<T> {
         private final Iterator<T> inner;
-        private final Comparator<? super T> cmp;
+        private final Comparator<? super T> comparator;
         private T previous;
+        private boolean hasPrevious = false;
 
-        ValidatingIterator(Iterator<T> inner, Comparator<? super T> cmp) {
+        ValidatingIterator(Iterator<T> inner, Comparator<? super T> comparator) {
             this.inner = inner;
-            this.cmp   = cmp;
+            this.comparator = comparator;
         }
 
         @Override
@@ -45,23 +46,22 @@ public class ValidatingIterable<T> implements Iterable<T> {
         @Override
         public T next() {
             T current = inner.next();
-            if (previous != null) {
-                int ord = cmp.compare(previous, current);
-                if (ord > 0) {
-                    throw new IllegalArgumentException(
-                            String.format(
-                                    "Out of order: previous key <%s> came after current key <%s>",
-                                    extractId(previous), extractId(current)
-                            )
-                    );
+            if (hasPrevious) {
+                int cmp = comparator.compare(previous, current);
+                if (cmp > 0) {
+                    throw new IllegalArgumentException(String.format(
+                            "Out of order: key <%s> should come before <%s>",
+                            extractId(current), extractId(previous)
+                    ));
                 }
-                if (ord == 0) {
+                if (cmp == 0) {
                     throw new IllegalArgumentException(
-                            "Duplicate key detected: " + extractId(current)
+                            String.format("Duplicate key detected: <%s>", extractId(current))
                     );
                 }
             }
             previous = current;
+            hasPrevious = true;
             return current;
         }
 
@@ -71,7 +71,7 @@ public class ValidatingIterable<T> implements Iterable<T> {
          */
         private String extractId(T item) {
             if (item instanceof Identifiable) {
-                return String.valueOf(((Identifiable<?>)item).getId());
+                return String.valueOf(((Identifiable<?>) item).getId());
             }
             return item.toString();
         }

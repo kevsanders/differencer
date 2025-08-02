@@ -1,372 +1,301 @@
 package sandkev.differencer;
 
-import lombok.Builder;
-import lombok.Data;
-import lombok.extern.slf4j.Slf4j;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.*;
 import sandkev.differencer.api.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Stream;
 
-import static junit.framework.Assert.assertTrue;
-import static org.hamcrest.Matchers.equalTo;
-import static org.junit.Assert.assertThat;
+import static org.junit.jupiter.api.Assertions.*;
 
+class RegularDifferencerTest {
 
-/**
- * Created by kevin on 08/10/2018.
- */
-@Slf4j
-public class RegularDifferencerTest {
+    private static final Comparator<MyType> KEY_COMPARATOR =
+            Comparator.comparing(MyType::getDomain)
+                    .thenComparing(MyType::getName);
 
-    private Comparator<MyType> keyComparator;
-    private DiffComparator<MyType> dataComparator;
-    private DiffAlgorithm<MyType, MyTypeKey, Comparator<MyType>, DiffComparator<MyType>> differencer;
-    private ComparisonResultStats stats;
-    private ComparisonResultHandler<MyType, MyTypeKey> handler;
+    private static final DiffComparator<MyType> DATA_COMPARATOR = (o1, o2) -> {
+        BigDecimal tolerance = new BigDecimal("0.0001");
+        DiffSummary diffs = new DiffSummary();
+        if (!o1.getSensitiveValue().equals(o2.getSensitiveValue())) {
+            BigDecimal absDiff = o1.getSensitiveValue().abs().subtract(o2.getSensitiveValue().abs());
+            if( absDiff.compareTo(tolerance) <= 0) {
+                diffs.addDiff("sensitiveValue", o1.getSensitiveValue(), o2.getSensitiveValue(), ComparisonResult.ApproximatelyEqual);
+            } else {
+                diffs.addDiff("sensitiveValue", o1.getSensitiveValue(), o2.getSensitiveValue(), ComparisonResult.Changed);
+            }
+        }
+        if (o1.getRegion() != o2.getRegion()) {
+            diffs.addDiff("region", o1.getRegion(), o2.getRegion(), ComparisonResult.Changed);
+        }
+        if (!Objects.equals(o1.getBio(), o2.getBio())) {
+            diffs.addDiff("bio", o1.getBio(), o2.getBio(), ComparisonResult.Changed);
+        }
+        return diffs;
+    };
 
-    @Data
-    @Builder(toBuilder = true)
-    public static class MyTypeKey {
-        String name;
-        Long domain;
+    private DiffAlgorithm<MyType,MyTypeKey> differencer;
+    private ComparisonResultStats<MyType,MyTypeKey> stats;
+
+    @BeforeEach
+    void setUp() {
+        differencer = new RegularDifferencer<>(KEY_COMPARATOR, DATA_COMPARATOR);
+        stats       = new ComparisonResultStats<>();
     }
-    @Data
-    @Builder(toBuilder = true)
-    public static class MyType implements Identifiable<MyTypeKey> {
-        String name;
-        Long domain;
-        int region;
-        int flavour;
-        String bio;
-        LocalDateTime lastUpdated;
+
+    static record MyTypeKey(String name, Long domain) {}
+
+    static class MyType implements Identifiable<MyTypeKey> {
+        private final String name;
+        private final Long   domain;
+        private final int    region;
+        private final BigDecimal sensitiveValue;
+        private final String bio;
+        private final LocalDateTime lastUpdated;
+
+        MyType(String name, Long domain, int region, BigDecimal sensitiveValue, String bio, LocalDateTime lastUpdated) {
+            this.name        = name;
+            this.domain      = domain;
+            this.region      = region;
+            this.sensitiveValue = sensitiveValue;
+            this.bio         = bio;
+            this.lastUpdated = lastUpdated;
+        }
+
         @Override
         public MyTypeKey getId() {
-            return MyTypeKey.builder()
-                    .name(name)
-                    .domain(domain)
-                    .build();
+            return new MyTypeKey(name, domain);
         }
+        public String getName()       { return name; }
+        public Long   getDomain()     { return domain; }
+        public int    getRegion()     { return region; }
+        public BigDecimal getSensitiveValue()    { return sensitiveValue; }
+        public String getBio()        { return bio; }
+        public LocalDateTime getLastUpdated() { return lastUpdated; }
     }
 
-    @Before
-    public void setUp() {
-        keyComparator = Comparator.comparing(MyType::getDomain)
-                .thenComparing(MyType::getName);
-        dataComparator = (o1, o2) -> {
-            DiffSummary diffs = new DiffSummary();
-            if (o1.getFlavour() != o2.getFlavour()) {
-                diffs.addDiff("flavour",
-                        o1.getFlavour(), o2.getFlavour(),
-                        ComparisonResult.Changed);
-            }
-            if (o1.getRegion() != o2.getRegion()) {
-                diffs.addDiff("region",
-                        o1.getRegion(), o2.getRegion(),
-                        ComparisonResult.Changed);
-            }
-            if (!Objects.equals(o1.getBio(), o2.getBio())) {
-                diffs.addDiff("bio",
-                        o1.getBio(), o2.getBio(),
-                        ComparisonResult.Changed);
-            }
-            return diffs;
-        };
-
-        differencer = new RegularDifferencer(keyComparator, dataComparator);
-        stats = new ComparisonResultStats();
-        handler = new ComparisonResultHandler<MyType, MyTypeKey>() {
-            @Override
-            public void onEqual(MyTypeKey id) {
-                log.info("equals: " + id);
-                stats.onEqual(id);
-            }
-
-            @Override
-            public void onApproximatelyEqual(MyTypeKey id, DiffSummary diff) {
-                log.info("appoximatelyEquals: " + id + " diff: " + diff);
-                stats.onApproximatelyEqual(id, diff);
-            }
-
-            @Override
-            public void onAdded(MyTypeKey id, MyType added) {
-                log.info("added: " + added );
-                stats.onAdded(id, added);
-            }
-
-            @Override
-            public void onDropped(MyTypeKey id, MyType dropped) {
-                log.info("dropped: " + dropped );
-                stats.onDropped(id, dropped);
-            }
-
-            @Override
-            public void onChanged(MyTypeKey id, DiffSummary diff) {
-                log.info("changed: " + id + " diff: " + diff );
-                stats.onChanged(id, diff);
-            }
-
-            @Override
-            public String describe() {
-                return stats.describe();
-            }
-
-        };
-
+    private static MyType make(long domain, String name, int region, BigDecimal sensitiveValue, String bio) {
+        return new MyType(name, domain, region, sensitiveValue, bio, LocalDateTime.now());
     }
 
-    @Test(expected = IllegalArgumentException.class)
-    public void throwsOnUnsortedInputWhenValidateOn() {
-        List<MyType> unsorted = Arrays.asList(
-                make(1L,"b", 0, 1, "cool"),
-                make(1L,"a", 0, 1, "cool")
-        );
-        RegularDifferencer<MyType,MyTypeKey> vDiff =
-                new RegularDifferencer<>(keyComparator, dataComparator, true);
-        vDiff.computeDiff(unsorted, unsorted, handler);
-    }
-
-    @Test
-    public void testTwoChangesNoAddsOrDrops() {
-        // arrange
-        List<MyType> original = Arrays.asList(
-                make(1L,"a",0,1,"cool"),
-                make(1L,"b",0,1,"cool"),
-                make(1L,"c",0,1,"cool"),
-                make(1L,"d",0,1,"cool"),
-                make(1L,"e",0,1,"cool")
-        );
-        List<MyType> revised = Arrays.asList(
-                make(1L,"a",0,1,"cool"),
-                make(1L,"b",0,1,"cool"),
-                make(1L,"c",0,1,"cool"),
-                make(1L,"d",1,1,"cool"),  // region changed
-                make(1L,"e",0,2,"coool")  // flavour & bio changed
-        );
-        ComparisonResultStats stats = new ComparisonResultStats();
-
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("diffScenarios")
+    void computeDiff_variousScenarios(String description,
+                                      List<MyType> original,
+                                      List<MyType> revised,
+                                      int expectEquals,
+                                      int expectApproximatelyEquals,
+                                      int expectAdded,
+                                      int expectDropped,
+                                      int expectChanged,
+                                      Set<MyTypeKey> expectAddedKeys,
+                                      Set<MyTypeKey> expectDroppedKeys,
+                                      Set<MyTypeKey> expectChangedKeys) {
         // act
         differencer.computeDiff(original, revised, stats);
 
-        // assert
-        assertThat(stats.getEqualCount().get(), equalTo(3));
-        assertThat(stats.getChangedCount().get(), equalTo(2));
-        assertThat(stats.getAddedCount().get(), equalTo(0));
-        assertThat(stats.getDroppedCount().get(), equalTo(0));
-        assertTrue(stats.getChangedKeys().contains(key("d", 1L)));
-        assertTrue(stats.getChangedKeys().contains(key("e", 1L)));
+        // assert counts
+        assertAll(description,
+                () -> assertEquals(expectEquals,  stats.getEqualCount().get(),   "equals"),
+                () -> assertEquals(expectApproximatelyEquals,  stats.getApproximatelyEqualCount().get(),   "approximatelyEquals"),
+                () -> assertEquals(expectAdded,   stats.getAddedCount().get(),   "added"),
+                () -> assertEquals(expectDropped, stats.getDroppedCount().get(), "dropped"),
+                () -> assertEquals(expectChanged, stats.getChangedCount().get(), "changed")
+        );
+
+        // assert specific keys
+        assertEquals(expectAddedKeys,   stats.getAddedKeys(),   "added keys");
+        assertEquals(expectDroppedKeys, stats.getDroppedKeys(), "dropped keys");
+        assertEquals(expectChangedKeys, stats.getChangedKeys(), "changed keys");
+    }
+
+    static Stream<Arguments> diffScenarios() {
+        return Stream.of(
+                Arguments.of("all equal",
+                        List.of(make(1,"a",0,BigDecimal.valueOf(1.0),"x"),
+                                make(1,"b",0,BigDecimal.valueOf(1.0),"y"),
+                                make(1,"c",0,BigDecimal.valueOf(1.0),"z")),
+                        List.of(make(1,"a",0,BigDecimal.valueOf(1.0),"x"),
+                                make(1,"b",0,BigDecimal.valueOf(1.0),"y"),
+                                make(1,"c",0,BigDecimal.valueOf(1.0),"z")),
+                        3, 0, 0, 0, 0,
+                        Set.of(), Set.of(), Set.of()
+                ),
+                Arguments.of("one approx equal",
+                        List.of(make(1,"a",0,BigDecimal.valueOf(1.000001),"x"),
+                                make(1,"b",0,BigDecimal.valueOf(1.0),"y"),
+                                make(1,"c",0,BigDecimal.valueOf(1.0),"z")),
+                        List.of(make(1,"a",0,BigDecimal.valueOf(1.0),"x"),
+                                make(1,"b",0,BigDecimal.valueOf(1.0),"y"),
+                                make(1,"c",0,BigDecimal.valueOf(1.0),"z")),
+                        2, 1, 0, 0, 0,
+                        Set.of(), Set.of(), Set.of()
+                ),
+                Arguments.of("two changes, no drop or add",
+                        List.of(make(1L,"a",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"b",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"c",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"d",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"e",0,BigDecimal.valueOf(1.0),"cool")),
+                        List.of(make(1L,"a",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"b",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"c",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"d",1,BigDecimal.valueOf(1.0),"cool"),   // region changed
+                                make(1L,"e",0,BigDecimal.valueOf(2.0),"coool")), // flavour & bio changed
+                        3, 0, 0, 0, 2,
+                        Set.of(), Set.of(), Set.of(new MyTypeKey("d", 1L),new MyTypeKey("e", 1L))
+                ),
+                Arguments.of("one addition at start",
+                        List.of(make(1L,"b",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"c",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"d",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"e",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"f",0,BigDecimal.valueOf(1.0),"cool")),
+                        List.of(make(1L,"a",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"b",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"c",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"d",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"e",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"f",0,BigDecimal.valueOf(1.0),"cool")),
+                        5, 0, 1, 0, 0,
+                        Set.of(new MyTypeKey("a", 1L)),
+                        Set.of(),
+                        Set.of()
+                ),
+                Arguments.of("one addition at end",
+                        List.of(make(1L,"a",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"b",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"c",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"d",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"e",0,BigDecimal.valueOf(1.0),"cool")),
+                        List.of(make(1L,"a",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"b",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"c",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"d",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"e",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"f",0,BigDecimal.valueOf(1.0),"cool")),
+                        5, 0, 1, 0, 0,
+                        Set.of(new MyTypeKey("f", 1L)),
+                        Set.of(),
+                        Set.of()
+                ),
+                Arguments.of("one addition in middle",
+                        List.of(make(1L,"a",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"b",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"c",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"e",0,BigDecimal.valueOf(1.0),"cool")),
+                        List.of(make(1L,"a",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"b",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"c",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"d",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"e",0,BigDecimal.valueOf(1.0),"cool")),
+                        4, 0, 1, 0, 0,
+                        Set.of(new MyTypeKey("d", 1L)),
+                        Set.of(),
+                        Set.of()
+                ),
+                Arguments.of("one drop at start",
+                        List.of(make(1L,"a",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"b",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"c",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"d",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"e",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"f",0,BigDecimal.valueOf(1.0),"cool")),
+                        List.of(make(1L,"b",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"c",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"d",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"e",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"f",0,BigDecimal.valueOf(1.0),"cool")),
+                        5, 0, 0, 1, 0,
+                        Set.of(),
+                        Set.of(new MyTypeKey("a", 1L)),
+                        Set.of()
+                ),
+                Arguments.of("one drop in middle",
+                        List.of(make(1L,"a",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"b",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"c",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"d",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"e",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"f",0,BigDecimal.valueOf(1.0),"cool")),
+                        List.of(make(1L,"a",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"b",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"d",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"e",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"f",0,BigDecimal.valueOf(1.0),"cool")),
+                        5, 0, 0, 1, 0,
+                        Set.of(),
+                        Set.of(new MyTypeKey("c", 1L)),
+                        Set.of()
+                ),
+                Arguments.of("one drop at end",
+                        List.of(make(1L,"a",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"b",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"c",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"d",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"e",0,BigDecimal.valueOf(1.0),"cool")),
+                        List.of(make(1L,"a",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"b",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"c",0,BigDecimal.valueOf(1.0),"cool"),
+                                make(1L,"d",0,BigDecimal.valueOf(1.0),"cool")),
+                        4, 0, 0, 1, 0,
+                        Set.of(),
+                        Set.of(new MyTypeKey("e", 1L)),
+                        Set.of()
+                ),
+                Arguments.of("one change",
+                        List.of(make(1,"a",0,BigDecimal.valueOf(1.0),"x"),
+                                make(1,"b",0,BigDecimal.valueOf(1.0),"y"),
+                                make(1,"c",0,BigDecimal.valueOf(1.0),"z")),
+                        List.of(make(1,"a",0,BigDecimal.valueOf(1.0),"x"),
+                                make(1,"b",1,BigDecimal.valueOf(1.0),"y"),
+                                make(1,"c",0,BigDecimal.valueOf(1.0),"z")),
+                        2, 0, 0, 0, 1,
+                        Set.of(),
+                        Set.of(),
+                        Set.of(new MyTypeKey("b", 1L))
+                ),
+                Arguments.of("mixed (drop, change, add)",
+                        List.of(make(1,"a",0,BigDecimal.valueOf(1.0),"x"),
+                                make(1,"b",0,BigDecimal.valueOf(1.0),"y"),
+                                make(1,"c",0,BigDecimal.valueOf(1.0),"z")),
+                        List.of(make(1,"b",1,BigDecimal.valueOf(1.0),"y"),
+                                make(1,"c",0,BigDecimal.valueOf(1.0),"z"),
+                                make(1,"d",0,BigDecimal.valueOf(1.0),"w")),
+                        1, 0, 1, 1, 1,
+                        Set.of(new MyTypeKey("d", 1L)),
+                        Set.of(new MyTypeKey("a", 1L)),
+                        Set.of(new MyTypeKey("b", 1L))
+                )
+        );
     }
 
     @Test
-    public void testAdditionAtStart() {
-        // arrange
-        List<MyType> original = Arrays.asList(
-                make(1L,"b",0,1,"cool"),
-                make(1L,"c",0,1,"cool"),
-                make(1L,"d",0,1,"cool"),
-                make(1L,"e",0,1,"cool"),
-                make(1L,"f",0,1,"cool")
+    void throwsOnUnsortedInputWhenValidateOn() {
+        var unsorted = List.of(
+                make(1,"b",0,BigDecimal.valueOf(1.0),"cool"),
+                make(1,"a",0,BigDecimal.valueOf(1.0),"cool")
         );
-        List<MyType> revised = Arrays.asList(
-                make(1L,"a",0,1,"cool"),
-                make(1L,"b",0,1,"cool"),
-                make(1L,"c",0,1,"cool"),
-                make(1L,"d",0,1,"cool"),
-                make(1L,"e",0,1,"cool"),
-                make(1L,"f",0,1,"cool")
+        var vDiff = RegularDifferencer.withValidation(KEY_COMPARATOR, DATA_COMPARATOR);
+        assertThrows(IllegalArgumentException.class,
+                () -> vDiff.computeDiff(unsorted, unsorted, new ComparisonResultStats<>())
         );
-        ComparisonResultStats stats = new ComparisonResultStats();
-
-        // act
-        differencer.computeDiff(original, revised, stats);
-
-        // assert
-        assertThat(stats.getEqualCount().get(), equalTo(5));
-        assertThat(stats.getChangedCount().get(), equalTo(0));
-        assertThat(stats.getAddedCount().get(), equalTo(1));
-        assertThat(stats.getDroppedCount().get(), equalTo(0));
-        assertTrue(stats.getAddedKeys().contains(key("a", 1L)));
     }
 
     @Test
-    public void testAdditionAtEnd() {
-        // arrange
-        List<MyType> original = Arrays.asList(
-                make(1L,"a",0,1,"cool"),
-                make(1L,"b",0,1,"cool"),
-                make(1L,"c",0,1,"cool"),
-                make(1L,"d",0,1,"cool"),
-                make(1L,"e",0,1,"cool")
-        );
-        List<MyType> revised = Arrays.asList(
-                make(1L,"a",0,1,"cool"),
-                make(1L,"b",0,1,"cool"),
-                make(1L,"c",0,1,"cool"),
-                make(1L,"d",0,1,"cool"),
-                make(1L,"e",0,1,"cool"),
-                make(1L,"f",0,1,"cool")
-        );
-        ComparisonResultStats stats = new ComparisonResultStats();
+    void staticFactoryMethods_toggleValidationFlag() {
+        var withVal    = RegularDifferencer.withValidation(KEY_COMPARATOR, DATA_COMPARATOR);
+        var withoutVal = RegularDifferencer.withoutValidation(KEY_COMPARATOR, DATA_COMPARATOR);
 
-        // act
-        differencer.computeDiff(original, revised, stats);
-
-        // assert
-        assertThat(stats.getEqualCount().get(), equalTo(5));
-        assertThat(stats.getChangedCount().get(), equalTo(0));
-        assertThat(stats.getAddedCount().get(), equalTo(1));
-        assertThat(stats.getDroppedCount().get(), equalTo(0));
-        assertTrue(stats.getAddedKeys().contains(key("f", 1L)));
+        assertTrue(withVal.isValidationOn(),   "withValidation should enable validation");
+        assertFalse(withoutVal.isValidationOn(), "withoutValidation should disable validation");
     }
-
-    @Test
-    public void testAdditionInMiddle() {
-        // arrange
-        List<MyType> original = Arrays.asList(
-                make(1L,"a",0,1,"cool"),
-                make(1L,"b",0,1,"cool"),
-                make(1L,"c",0,1,"cool"),
-                make(1L,"e",0,1,"cool")
-        );
-        List<MyType> revised = Arrays.asList(
-                make(1L,"a",0,1,"cool"),
-                make(1L,"b",0,1,"cool"),
-                make(1L,"c",0,1,"cool"),
-                make(1L,"d",0,1,"cool"),
-                make(1L,"e",0,1,"cool")
-        );
-        ComparisonResultStats stats = new ComparisonResultStats();
-
-        // act
-        differencer.computeDiff(original, revised, stats);
-
-        // assert
-        assertThat(stats.getEqualCount().get(), equalTo(4));
-        assertThat(stats.getChangedCount().get(), equalTo(0));
-        assertThat(stats.getAddedCount().get(), equalTo(1));
-        assertThat(stats.getDroppedCount().get(), equalTo(0));
-        assertTrue(stats.getAddedKeys().contains(key("d", 1L)));
-    }
-
-    @Test
-    public void testDropAtStart() {
-        // arrange
-        List<MyType> original = Arrays.asList(
-                make(1L,"a",0,1,"cool"),
-                make(1L,"b",0,1,"cool"),
-                make(1L,"c",0,1,"cool"),
-                make(1L,"d",0,1,"cool"),
-                make(1L,"e",0,1,"cool"),
-                make(1L,"f",0,1,"cool")
-        );
-        List<MyType> revised = Arrays.asList(
-                make(1L,"b",0,1,"cool"),
-                make(1L,"c",0,1,"cool"),
-                make(1L,"d",0,1,"cool"),
-                make(1L,"e",0,1,"cool"),
-                make(1L,"f",0,1,"cool")
-        );
-        ComparisonResultStats stats = new ComparisonResultStats();
-
-        // act
-        differencer.computeDiff(original, revised, stats);
-
-        // assert
-        assertThat(stats.getEqualCount().get(), equalTo(5));
-        assertThat(stats.getChangedCount().get(), equalTo(0));
-        assertThat(stats.getAddedCount().get(), equalTo(0));
-        assertThat(stats.getDroppedCount().get(), equalTo(1));
-        assertTrue(stats.getDroppedKeys().contains(key("a", 1L)));
-    }
-
-    @Test
-    public void testDropAtEnd() {
-        // arrange
-        List<MyType> original = Arrays.asList(
-                make(1L,"a",0,1,"cool"),
-                make(1L,"b",0,1,"cool"),
-                make(1L,"c",0,1,"cool"),
-                make(1L,"d",0,1,"cool"),
-                make(1L,"e",0,1,"cool"),
-                make(1L,"f",0,1,"cool")
-        );
-        List<MyType> revised = Arrays.asList(
-                make(1L,"a",0,1,"cool"),
-                make(1L,"b",0,1,"cool"),
-                make(1L,"c",0,1,"cool"),
-                make(1L,"d",0,1,"cool"),
-                make(1L,"e",0,1,"cool")
-        );
-        ComparisonResultStats stats = new ComparisonResultStats();
-
-        // act
-        differencer.computeDiff(original, revised, stats);
-
-        // assert
-        assertThat(stats.getEqualCount().get(), equalTo(5));
-        assertThat(stats.getChangedCount().get(), equalTo(0));
-        assertThat(stats.getAddedCount().get(), equalTo(0));
-        assertThat(stats.getDroppedCount().get(), equalTo(1));
-        assertTrue(stats.getDroppedKeys().contains(key("f", 1L)));
-    }
-
-    @Test
-    public void testDropInMiddle() {
-        // arrange
-        List<MyType> original = Arrays.asList(
-                make(1L,"a",0,1,"cool"),
-                make(1L,"b",0,1,"cool"),
-                make(1L,"c",0,1,"cool"),
-                make(1L,"d",0,1,"cool"),
-                make(1L,"e",0,1,"cool"),
-                make(1L,"f",0,1,"cool")
-        );
-        List<MyType> revised = Arrays.asList(
-                make(1L,"a",0,1,"cool"),
-                make(1L,"b",0,1,"cool"),
-                make(1L,"d",0,1,"cool"),
-                make(1L,"e",0,1,"cool"),
-                make(1L,"f",0,1,"cool")
-        );
-        ComparisonResultStats stats = new ComparisonResultStats();
-
-        // act
-        differencer.computeDiff(original, revised, stats);
-
-        // assert
-        assertThat(stats.getEqualCount().get(), equalTo(5));
-        assertThat(stats.getChangedCount().get(), equalTo(0));
-        assertThat(stats.getAddedCount().get(), equalTo(0));
-        assertThat(stats.getDroppedCount().get(), equalTo(1));
-        assertTrue(stats.getDroppedKeys().contains(key("c", 1L)));
-    }
-
-    @Test
-    public void staticFactoryWithValidation() {
-        RegularDifferencer v = RegularDifferencer.withValidation(keyComparator, dataComparator);
-        assertTrue(v.isValidationOn());
-    }
-
-    @Test
-    public void staticFactoryWithoutValidation() {
-        RegularDifferencer v = RegularDifferencer.withoutValidation(keyComparator, dataComparator);
-        assertTrue(!v.isValidationOn());
-    }
-
-    private MyType make(long domain, String name, int region, int flavour, String bio) {
-        return MyType.builder()
-                .domain(domain)
-                .name(name)
-                .region(region)
-                .flavour(flavour)
-                .bio(bio)
-                .build();
-    }
-
-    static MyTypeKey key(String name, long domain) {
-        return new MyTypeKey(name, domain);
-    }
-
 }

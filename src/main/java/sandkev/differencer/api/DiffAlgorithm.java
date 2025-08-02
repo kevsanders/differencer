@@ -1,14 +1,39 @@
 package sandkev.differencer.api;
 
-import java.util.Comparator;
-import java.util.function.Supplier;
+import sandkev.differencer.ComparisonResultStats;
 
 /**
- * @param <T> Type of object to be compared
- * @param <K> Primary key of object to be compared
- * @param <C> Key comparator
- * @param <D> Data comparator
+ * A functional interface that computes the diff between two
+ * sorted, duplicate-free streams of Identifiable<K> items.
+ *
+ * @param <T> the element type, which must expose a primary key of type K
+ * @param <K> the type of the primary key
  */
-public interface DiffAlgorithm<T extends Identifiable<K>, K, C extends Comparator<? super T>, D extends DiffComparator<? super T>> {
-    void computeDiff(Iterable<T> expectedSource, Iterable<T> actualSource, ComparisonResultHandler<T,K> handler);
+@FunctionalInterface
+public interface DiffAlgorithm<T extends Identifiable<K>, K> {
+
+    /**
+     * Walks two sorted, duplicate-free iterables in one pass and fires
+     * callback events for equals, additions, drops and changes.
+     *
+     * @param expected        the “baseline” stream, sorted and without duplicates
+     * @param actual          the “new”   stream,   sorted and without duplicates
+     * @param handler         where to send your onEqual/onAdded/onDropped/onChanged events
+     * @throws NullPointerException     if any argument is null
+     * @throws IllegalArgumentException if the inputs aren’t properly sorted or contain duplicates
+     */
+    void computeDiff(Iterable<T>                expected,
+                     Iterable<T>                actual,
+                     ComparisonResultHandler<T,K> handler);
+
+    /**
+     * Convenience method: runs the diff and returns a ComparisonResultStats
+     * so you don’t have to wire up a handler yourself.
+     */
+    default ComparisonResultStats diffAndCollect(Iterable<T> expected,
+                                                 Iterable<T> actual) {
+        ComparisonResultStats stats = new ComparisonResultStats();
+        computeDiff(expected, actual, stats);
+        return stats;
+    }
 }

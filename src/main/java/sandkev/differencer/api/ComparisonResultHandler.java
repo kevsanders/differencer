@@ -11,6 +11,4 @@ public interface ComparisonResultHandler<T,K> {
     void onAdded(K id, T added);
     void onDropped(K id, T dropped);
     void onChanged(K id, DiffSummary diff);
-
-    String describe();
 }

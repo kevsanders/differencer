@@ -22,7 +22,7 @@ import static java.util.Objects.requireNonNull;
  * </ul>
  */
 public class RegularDifferencer<T extends Identifiable<K>,K>
-  implements DiffAlgorithm<T,K,Comparator<? super T>,DiffComparator<? super T>> {
+  implements DiffAlgorithm<T,K> {
 
     private final Comparator<? super T> keyComparator;
     private final DiffComparator<? super T> dataComparator;
@@ -50,11 +50,11 @@ public class RegularDifferencer<T extends Identifiable<K>,K>
 
     public static <T extends Identifiable<K>,K> RegularDifferencer<T,K> withValidation(Comparator<? super T> keyComparator,
                                                                                        DiffComparator<? super T> dataComparator) {
-       return new RegularDifferencer<>(keyComparator, dataComparator, true);
+       return new RegularDifferencer<T,K>(keyComparator, dataComparator, true);
     }
     public static <T extends Identifiable<K>,K> RegularDifferencer<T,K> withoutValidation(Comparator<? super T> keyComparator,
                                                                                           DiffComparator<? super T> dataComparator) {
-        return new RegularDifferencer<>(keyComparator, dataComparator, false);
+        return new RegularDifferencer<T,K>(keyComparator, dataComparator, false);
     }
 
     /**
@@ -113,13 +113,9 @@ public class RegularDifferencer<T extends Identifiable<K>,K>
     private void handleMatch(ComparisonResultHandler<T, K> handler, T e, T a) {
         DiffSummary d = dataComparator.compare(a, e);
         switch (d.getComparisonResult()) {
-          case Equal:
-            handler.onEqual(e.getId()); break;
-          case ApproximatelyEqual:
-            handler.onApproximatelyEqual(e.getId(), d); break;
-          case Changed:
-            handler.onChanged(e.getId(), d); break;
-            // no default → unhandled new enum values will be a compile‑time error
+            case Equal -> handler.onEqual(e.getId());
+            case ApproximatelyEqual -> handler.onApproximatelyEqual(e.getId(), d);
+            case Changed -> handler.onChanged(e.getId(), d);
         }
     }
 

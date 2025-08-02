@@ -1,82 +1,81 @@
 package sandkev.differencer;
 
 import lombok.Getter;
+import lombok.ToString;
 import sandkev.differencer.api.ComparisonResultHandler;
 
-import java.nio.charset.Charset;
-import java.util.HashSet;
+import java.util.Collections;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class ComparisonResultStats implements ComparisonResultHandler {
-    @Getter
+@ToString(onlyExplicitlyIncluded = true)
+public class ComparisonResultStats<T,K> implements ComparisonResultHandler<T,K> {
+    @Getter @ToString.Include
     private final AtomicInteger equalCount = new AtomicInteger();
-    @Getter
+    @Getter @ToString.Include
     private final AtomicInteger approximatelyEqualCount = new AtomicInteger();
-    @Getter
+    @Getter @ToString.Include
     private final AtomicInteger addedCount = new AtomicInteger();
-    @Getter
+    @Getter @ToString.Include
     private final AtomicInteger droppedCount = new AtomicInteger();
-    @Getter
+    @Getter @ToString.Include
     private final AtomicInteger changedCount = new AtomicInteger();
-    private Set<Object> changedKeys = new HashSet<>();
-    private Set<Object> addedKeys = new HashSet<>();
-    private Set<Object> droppedKeys = new HashSet<>();
+
+    private final Set<K> changedKeys = ConcurrentHashMap.newKeySet();
+    private final Set<K> addedKeys   = ConcurrentHashMap.newKeySet();
+    private final Set<K> droppedKeys = ConcurrentHashMap.newKeySet();
 
     @Override
-    public void onEqual(Object id) {
+    public void onEqual(K id) {
         equalCount.incrementAndGet();
     }
 
     @Override
-    public void onApproximatelyEqual(Object id, DiffSummary diff) {
+    public void onApproximatelyEqual(K id, DiffSummary diff) {
         approximatelyEqualCount.incrementAndGet();
     }
 
     @Override
-    public void onAdded(Object id, Object added) {
+    public void onAdded(K id, T added) {
         addedKeys.add(id);
         addedCount.incrementAndGet();
     }
 
     @Override
-    public void onDropped(Object id, Object dropped) {
+    public void onDropped(K id, T dropped) {
         droppedKeys.add(id);
         droppedCount.incrementAndGet();
     }
 
     @Override
-    public void onChanged(Object id, DiffSummary diff) {
+    public void onChanged(K id, DiffSummary diff) {
         changedKeys.add(id);
         changedCount.incrementAndGet();
     }
 
-    @Override
-    public String describe() {
-        return toString();
-    }
-
-    @Override
-    public String toString() {
-        return "ComparisonResultStats{" +
-                "equal=" + equalCount +
-                ", approximatelyEqual=" + approximatelyEqualCount +
-                ", added=" + addedCount +
-                ", dropped=" + droppedCount +
-                ", changed=" + changedCount +
-                '}';
-    }
-
-    public Set<Object> getChangedKeys() {
-        return changedKeys;
+    // Unmodifiable views to protect internal state
+    public Set<K> getChangedKeys() {
+        return Collections.unmodifiableSet(changedKeys);
     }
 
     public Set<Object> getAddedKeys() {
-        return addedKeys;
+        return Collections.unmodifiableSet(addedKeys);
     }
 
     public Set<Object> getDroppedKeys() {
-        return droppedKeys;
+        return Collections.unmodifiableSet(droppedKeys);
     }
 
+    // Optionally, a reset method
+    public void reset() {
+        equalCount.set(0);
+        approximatelyEqualCount.set(0);
+        addedCount.set(0);
+        droppedCount.set(0);
+        changedCount.set(0);
+        changedKeys.clear();
+        addedKeys.clear();
+        droppedKeys.clear();
+    }
 }
