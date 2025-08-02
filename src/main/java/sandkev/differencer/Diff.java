@@ -7,11 +7,11 @@ import lombok.Data;
 @Builder(toBuilder = true)
 public class Diff {
     Object expectedValue;
-    Object rejectedValue;
+    Object actualValue;
 
     @Override
     public String toString() {
         return "expectedValue=" + expectedValue +
-                ", rejectedValue=" + rejectedValue;
+                ", actualValue=" + actualValue;
     }
 }

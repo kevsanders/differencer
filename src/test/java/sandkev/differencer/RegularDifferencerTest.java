@@ -298,4 +298,28 @@ class RegularDifferencerTest {
         assertTrue(withVal.isValidationOn(),   "withValidation should enable validation");
         assertFalse(withoutVal.isValidationOn(), "withoutValidation should disable validation");
     }
+
+    @Test
+    void diffAndCollect_detectsChangeAndAddition() {
+        var expected = List.of(
+                make(1,"b",0,BigDecimal.valueOf(1.0),"cool"),
+                make(1,"a",0,BigDecimal.valueOf(1.0),"cool")
+        );
+        var actual = List.of(
+                make(1,"b",0,BigDecimal.valueOf(1.0),"cool"),
+                make(1,"a",0,BigDecimal.valueOf(1.0),"un-cool"),
+                make(1,"x",0,BigDecimal.valueOf(1.0),"cool")
+        );
+
+        ComparisonResultStats<String, String> stats = differencer.diffAndCollect(expected, actual);
+
+        assertEquals(1, stats.getEqualCount().get());
+        assertEquals(1, stats.getChangedCount().get());
+        assertTrue(stats.getChangedKeys().contains(new MyTypeKey("a", 1L)));
+
+        assertEquals(1, stats.getAddedCount().get());
+        assertTrue(stats.getAddedKeys().contains(new MyTypeKey("x", 1L)));
+
+        assertEquals(0, stats.getDroppedCount().get());
+    }
 }

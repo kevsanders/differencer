@@ -76,9 +76,9 @@ class ComparisonResultStatsConcurrencyTest {
     void canReset() {
         ComparisonResultStats stats = new ComparisonResultStats();
         stats.onAdded(1, "a");
-        assertEquals(1, stats.getAddedCount());
+        assertEquals(1, stats.getAddedCount().get());
         stats.reset();
-        assertEquals(0, stats.getAddedCount());
+        assertEquals(0, stats.getAddedCount().get());
     }
 
 
