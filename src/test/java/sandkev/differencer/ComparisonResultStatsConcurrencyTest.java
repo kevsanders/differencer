@@ -2,6 +2,9 @@ package sandkev.differencer;
 
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.*;
 import java.util.stream.IntStream;
@@ -21,7 +24,7 @@ class ComparisonResultStatsConcurrencyTest {
         ExecutorService exec = Executors.newFixedThreadPool(NUM_THREADS);
         CyclicBarrier startBarrier = new CyclicBarrier(NUM_THREADS);
 
-        java.util.List<Future<?>> futures = new java.util.ArrayList<>();
+        List<Future<?>> futures = new ArrayList<>();
 
         // Kick off all workers
         for (int t = 0; t < NUM_THREADS; t++) {
@@ -43,7 +46,7 @@ class ComparisonResultStatsConcurrencyTest {
         }
 
         exec.shutdown();
-        assertTimeoutPreemptively(java.time.Duration.ofSeconds(30), () -> {
+        assertTimeoutPreemptively(Duration.ofSeconds(30), () -> {
             for (Future<?> future : futures) {
                 future.get(30, TimeUnit.SECONDS);
             }
